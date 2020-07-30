@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.RxWorker;
 import androidx.work.WorkManager;
@@ -15,7 +14,8 @@ import edu.cnm.deepdive.quotesbackground.R;
 import io.reactivex.Single;
 import java.util.concurrent.TimeUnit;
 
-public class PeriodicUpdateService {
+public class PeriodicUpdateService
+    implements SharedPreferences.OnSharedPreferenceChangeListener {
 
   @SuppressLint("StaticFieldLeak")
   private static Context context;
@@ -33,7 +33,7 @@ public class PeriodicUpdateService {
     defaultPollingInterval = context.getResources()
         .getInteger(R.integer.poll_interval_pref_default);
     preferences = PreferenceManager.getDefaultSharedPreferences(context);
-
+    preferences.registerOnSharedPreferenceChangeListener(this);
   }
 
   public static void setContext(Context context) {
@@ -54,6 +54,13 @@ public class PeriodicUpdateService {
     }
   }
 
+  @Override
+  public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+    if (key.equals(pollingIntervalPrefKey)) {
+      schedule();
+    }
+  }
+
   private static class InstanceHolder {
 
     private static final PeriodicUpdateService INSTANCE = new PeriodicUpdateService();
@@ -69,15 +76,18 @@ public class PeriodicUpdateService {
     @NonNull
     @Override
     public Single<Result> createWork() {
-     if (getId().equals(PeriodicUpdateService.getInstance().request.getId())) {
-       return PeriodicUpdateService.getInstance().quoteRepository.fetch()
-           .andThen(Single.fromCallable(() -> {
-             PeriodicUpdateService.getInstance().schedule();
-             return Result.success();
-           }));
-     } else {
-       return Single.just(Result.success());
-     }
+      PeriodicUpdateService service = PeriodicUpdateService.getInstance();
+      if (getId().equals(service.request.getId())) {
+        return service.quoteRepository.fetch()
+            .andThen(Single.fromCallable(() -> {
+              service.schedule();
+              return Result.success();
+            }));
+      } else {
+        return Single.just(Result.success());
+      }
     }
+
   }
+
 }
